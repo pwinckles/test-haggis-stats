@@ -2,6 +2,7 @@ async function parseLogAndPopulateForm() {
   const stats = parseLog(document.getElementById("allLogs").textContent);
   const data = await serializeJson(stats);
   document.getElementById("data").value = data;
+  log("1")
   document.getElementById("statsForm").submit();
 }
 
