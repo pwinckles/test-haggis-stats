@@ -566,7 +566,7 @@ document.addEventListener("paste", async function (event) {
 
 function convertBr2nl(innerHtml) {
   const parser = new DOMParser();
-  const modified = "<div>" + innerHtml.replaceAll("<br>", "||BR||") + "</div>";
+  const modified = "<div>" + innerHtml.replaceAll(/<br[^>]*?>/g, "||BR||") + "</div>";
   log(modified);
   const newDoc = parser.parseFromString(modified, "text/xml");
   const final = newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
