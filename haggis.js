@@ -528,37 +528,21 @@ function isBomb(inputString) {
 }
 
 document.addEventListener("paste", async function (event) {
-  log("paste");
   const clipboardData = event.clipboardData || window.clipboardData;
-
-  log("1");
-
   const htmlData = clipboardData.getData("text/html");
-
-  log("2");
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlData, "text/html");
 
-  log("3");
-
   const tableId = extractTableId(doc);
   document.getElementById("tableId").value = tableId;
 
-  log("4");
-
   const withColor = addColorData(doc);
-
-  log("5");
 
   const serializer = new XMLSerializer();
   const serializedLogs = serializer.serializeToString(withColor);
 
-  log("6");
-
   const logData = extractGameData(serializedLogs);
-
-  log("7");
 
   const textArea = document.getElementById("allLogs");
   textArea.textContent = JSON.stringify(logData);
