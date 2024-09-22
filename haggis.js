@@ -469,6 +469,11 @@ function extractGameData(htmlString) {
 
   for (const el of doc.querySelectorAll('.gamelogreview')) {
     const innerHtml = el.innerHTML;
+
+    if (innerHTML.includes(" remaining cards ")) {
+      log(innerHtml);
+    }
+
     if (innerHtml.includes("<br>")) {
       log(innerHtml);
       convertBr2nl(innerHtml).split("\n").forEach(l => lines.push(l));
