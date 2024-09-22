@@ -1,8 +1,8 @@
 async function parseLogAndPopulateForm() {
   const stats = parseLog(document.getElementById("allLogs").textContent);
-  const data = await serializeJson(stats);
-  document.getElementById("data").value = data;
-  document.getElementById("statsForm").submit();
+//  const data = await serializeJson(stats);
+//  document.getElementById("data").value = data;
+//  document.getElementById("statsForm").submit();
 }
 
 async function renderStats() {
@@ -470,6 +470,7 @@ function extractGameData(htmlString) {
   for (const el of doc.querySelectorAll('.gamelogreview')) {
     const innerHtml = el.innerHTML;
     if (innerHtml.includes("<br>")) {
+      log(innerHtml);
       convertBr2nl(innerHtml).split("\n").forEach(l => lines.push(l));
     } else {
       lines.push(el.textContent);
@@ -553,4 +554,11 @@ function extractTableId(doc) {
 
 function sortNumeric(a, b) {
   return a - b;
+}
+
+function log(stuff) {
+  const logDir = document.getElementById("log");
+  const d = document.createElement("d");
+  d.innerHTML = stuff;
+  logDir.appendChild(d);
 }
