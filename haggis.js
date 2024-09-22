@@ -470,7 +470,7 @@ function extractGameData(htmlString) {
   for (const el of doc.querySelectorAll('.gamelogreview')) {
     const innerHtml = el.innerHTML;
 
-    if (innerHTML.includes(" remaining cards ")) {
+    if (innerHtml.includes(" remaining cards ")) {
       log(innerHtml);
     }
 
