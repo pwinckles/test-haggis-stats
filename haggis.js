@@ -544,6 +544,8 @@ document.addEventListener("paste", async function (event) {
 
   const logData = extractGameData(serializedLogs);
 
+  logData.forEach(l => log(l));
+
   const textArea = document.getElementById("allLogs");
   textArea.textContent = JSON.stringify(logData);
 });
