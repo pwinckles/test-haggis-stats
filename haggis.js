@@ -553,7 +553,7 @@ function convertBr2nl(innerHtml) {
 //  log(modified);
   const newDoc = parser.parseFromString(modified, "text/xml");
   const final = newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
-  final.split("\n").forEach(l => log(l));
+//  final.split("\n").forEach(l => log(l));
   return final;
 }
 
