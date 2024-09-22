@@ -544,8 +544,12 @@ document.addEventListener("paste", async function (event) {
 
 function convertBr2nl(innerHtml) {
   const parser = new DOMParser();
-  const newDoc = parser.parseFromString("<div>" + innerHtml.replaceAll("<br>", "||BR||") + "</div>", "text/xml");
-  return newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
+  const modified = "<div>" + innerHtml.replaceAll("<br>", "||BR||") + "</div>";
+  log(modified);
+  const newDoc = parser.parseFromString(modified, "text/xml");
+  const final = newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
+  final.split("\n").forEach(l => log(l));
+  return final;
 }
 
 function extractTableId(doc) {
@@ -558,7 +562,8 @@ function sortNumeric(a, b) {
 
 function log(stuff) {
   const logDir = document.getElementById("log");
-  const d = document.createElement("d");
-  d.innerHTML = stuff;
+  const d = document.createElement("div");
+  d.setAttribute("style", "padding: 10px");
+  d.appendChild(document.createTextNode(stuff));
   logDir.appendChild(d);
 }
