@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Haggis Stats</title>
+        <script type="text/javascript" src="haggis.js"></script>
+        <style>
+            #allLogs { display: none;}
+        </style>
+    </head>
+    <body>
+        <h1>Haggis Stats</h1>
+        <ol>
+            <li>Select the completed game in BGA</li>
+            <li>Click "View Game Replay"</li>
+            <li>Select the entire page and copy it</li>
+            <li>Paste the copied page into the following textbox</li>
+        </ol>
+        <form id="statsForm" action="display.html">
+            <div id="allLogs" contenteditable></div>
+            <textarea id="logText" rows="10" cols="50"></textarea>
+            <input type="hidden" id="tableId" name="tableId">
+            <input type="hidden" id="data" name="data">
+            <br />
+            <br />
+            <button type="button" onclick="parseLogAndPopulateForm()">Submit</button>
+        </form>
+    </body>
+</html>
