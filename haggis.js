@@ -1,8 +1,8 @@
 async function parseLogAndPopulateForm() {
   const stats = parseLog(document.getElementById("allLogs").textContent);
-//  const data = await serializeJson(stats);
-//  document.getElementById("data").value = data;
-//  document.getElementById("statsForm").submit();
+  const data = await serializeJson(stats);
+  document.getElementById("data").value = data;
+  document.getElementById("statsForm").submit();
 }
 
 async function renderStats() {
@@ -462,7 +462,6 @@ function b64decode(str) {
 }
 
 function extractGameData(htmlString) {
-  log("extractGameData")
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlString, "text/html");
 
@@ -471,12 +470,12 @@ function extractGameData(htmlString) {
   for (const el of doc.querySelectorAll('.gamelogreview')) {
     const innerHtml = el.innerHTML;
 
-    if (innerHtml.includes(" remaining cards ")) {
-      log(innerHtml);
-    }
+//    if (innerHtml.includes(" remaining cards ")) {
+//      log(innerHtml);
+//    }
 
     if (innerHtml.includes("<br")) {
-      log(innerHtml);
+//      log(innerHtml);
       convertBr2nl(innerHtml).split("\n").forEach(l => lines.push(l));
     } else {
       lines.push(el.textContent);
@@ -551,7 +550,7 @@ document.addEventListener("paste", async function (event) {
 function convertBr2nl(innerHtml) {
   const parser = new DOMParser();
   const modified = "<div>" + innerHtml.replaceAll(/<br[^>]*?>/g, "||BR||") + "</div>";
-  log(modified);
+//  log(modified);
   const newDoc = parser.parseFromString(modified, "text/xml");
   const final = newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
   final.split("\n").forEach(l => log(l));
