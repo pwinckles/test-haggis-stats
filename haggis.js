@@ -475,7 +475,7 @@ function extractGameData(htmlString) {
       log(innerHtml);
     }
 
-    if (innerHtml.includes("<br>")) {
+    if (innerHtml.includes("<br")) {
       log(innerHtml);
       convertBr2nl(innerHtml).split("\n").forEach(l => lines.push(l));
     } else {
