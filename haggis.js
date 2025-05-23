@@ -1,8 +1,8 @@
 async function parseLogAndPopulateForm() {
   const stats = parseLog(document.getElementById("allLogs").textContent);
+  console.log(stats);
   const data = await serializeJson(stats);
   document.getElementById("data").value = data;
-  log("1")
   document.getElementById("statsForm").submit();
 }
 
@@ -19,15 +19,21 @@ async function renderStats() {
   }
 
   const stats = await deserializeJson(data);
-  const html = renderStatsAsHtmlString(tableId, stats);
-  document.getElementById("stats").innerHTML = html;
+
+  if (stats.playerCount === 2) {
+    document.getElementById("stats").innerHTML = render2pStatsAsHtmlString(tableId, stats);
+  } else if (stats.playerCount === 4) {
+    document.getElementById("stats").innerHTML = render4pStatsAsHtmlString(tableId, stats);
+  }
 }
 
 function parseLog(logLines) {
   const game = {
+    playerCount: 2,
     players: [],
     rounds: [],
     playerStats: {},
+    teams: {},
   };
 
   let inLog = false;
@@ -36,26 +42,49 @@ function parseLog(logLines) {
   for (const line of JSON.parse(logLines)) {
     const words = line.split(/\s+/);
     const player = words[0];
-    if (player === "Move" || player === "") {
+    if (player === "Move" || player === "You" || player === "") {
       continue;
     }
 
-    if (line.includes("starts a new round")) {
+    if (line.includes("starts a new round") || line.includes("will start a new round")) {
       inLog = true;
+
+      if (line.includes("will start a new round")) {
+        game.playerCount = 4;
+      }
+
       if (!(player in game.playerStats)) {
         game.playerStats[player] = createPlayerStats();
       }
       game.playerStats[player].led += 1;
+
       currentRound = {
         startPlayer: player,
         bets: {},
         tens: {},
         colorBombs: {},
         rainbowBombs: {},
+        startingScore: {},
         sums: {},
         points: {},
         hand: {},
+        outOrder: [],
+        remainingCount: {},
+        passesLead: {},
       };
+
+      // TODO score is wong. expected 562 was 557. missing 5 points
+
+      if (game.players.length === game.playerCount) {
+        for (const name of game.players) {
+          currentRound.startingScore[name] = game.playerStats[name].score;
+        }
+      } else {
+        for (const name of game.players) {
+          currentRound.startingScore[name] = 0;
+        }
+      }
+
       game.rounds.push(currentRound);
       continue;
     }
@@ -64,25 +93,68 @@ function parseLog(logLines) {
       continue;
     }
 
-    if (game.players.length < 2 && !game.players.includes(player)) {
+    if (game.players.length < game.playerCount && !game.players.includes(player)) {
       game.players.push(player);
       if (!(player in game.playerStats)) {
         game.playerStats[player] = createPlayerStats();
       }
+      if (game.rounds.length === 1) {
+        currentRound.startingScore[player] = 0;
+      }
     }
 
-    const score = line.match(/scores (\d+) point/);
+    let team = null;
+    if (game.playerCount === 4) {
+      team = identifyTeam(player, game);
+    }
+
+    // The order of this is important. Do not move!
+    const score = line.match(/scores? (\d+) point/);
     if (score) {
-      game.playerStats[player].score += Number(score[1]);
-      currentRound.points[player] =
-        (currentRound.points[player] ?? 0) + Number(score[1]);
+      const points = Number(score[1]);
+      game.playerStats[player].score += points;
+      currentRound.points[player] = (currentRound.points[player] ?? 0) + points;
+
+      if (line.includes("trick") || line.includes("remaining")) {
+        game.playerStats[player].pointsFromCards += points;
+      } else if (line.includes("bet")) {
+        game.playerStats[player].pointsFromBets += points;
+      } else if (line.includes("goes out")) {
+        game.playerStats[player].pointsFromRemaining += points;
+      }
+    }
+
+    if (words[1] === "sends" && Object.keys(game.teams).length != 2) {
+      const n = Object.keys(game.teams).length;
+      if (n === 1 && game.teams["team" + n].includes(player)) {
+        continue;
+      }
+      const teamName = "team" + (n + 1);
+      game.teams[teamName] = [player, words[2]];
+      continue;
     }
 
     if (words[1].includes("bets")) {
-      currentRound.bets[player] = words[2];
-      game.playerStats[player].bets[words[2]] =
-        (game.playerStats[player].bets[words[2]] ?? 0) + 1;
-      game.playerStats[player].totalBets += 1;
+      if (game.playerCount === 2) {
+        currentRound.bets[player] = words[2];
+        game.playerStats[player].bets[words[2]] = (game.playerStats[player].bets[words[2]] ?? 0) + 1;
+        game.playerStats[player].totalBets += 1;
+      } else if (game.playerCount === 4) {
+        for (const member of game.teams[team]) {
+          if (currentRound.bets[member]) {
+            const oldBet = currentRound.bets[member];
+            delete currentRound.bets[member];
+            game.playerStats[member].bets[oldBet] -= 1;
+            game.playerStats[member].totalBets -= 1
+            break;
+          }
+        }
+
+        currentRound.bets[player] = words[2];
+        game.playerStats[player].bets[words[2]] = (game.playerStats[player].bets[words[2]] ?? 0) + 1;
+        game.playerStats[player].totalBets += 1;
+      }
+
       continue;
     }
 
@@ -113,12 +185,10 @@ function parseLog(logLines) {
 
       if (isBomb(words[2])) {
         if (isColorBomb(words[2])) {
-          currentRound.colorBombs[player] =
-            (currentRound.colorBombs[player] ?? 0) + 1;
+          currentRound.colorBombs[player] = (currentRound.colorBombs[player] ?? 0) + 1;
           game.playerStats[player].colorBombs += 1;
         } else {
-          currentRound.rainbowBombs[player] =
-            (currentRound.rainbowBombs[player] ?? 0) + 1;
+          currentRound.rainbowBombs[player] = (currentRound.rainbowBombs[player] ?? 0) + 1;
           game.playerStats[player].rainbowBombs += 1;
         }
       }
@@ -126,58 +196,54 @@ function parseLog(logLines) {
       continue;
     }
 
-    if (line.includes("goes out")) {
-      currentRound.winner = player;
-      currentRound.remainingCards = Number(words[8]);
-      game.playerStats[player].wins += 1;
+    if (line.includes("achieves a slam")) {
+      game.playerStats[player].slams += 1;
+      currentRound.outOrder.push(player);
+      currentRound.remainingCount[player] = currentRound.remainingCount[currentRound.outOrder[0]];
+    }
 
-      if (currentRound.bets[player]) {
-        game.playerStats[player].successfulBets += 1;
+    if (line.includes("passes the lead")) {
+      currentRound.passesLead[player] = (currentRound.passesLead[player] ?? 0) + 1;
+      continue;
+    }
+
+    if (line.includes("goes out")) {
+      currentRound.outOrder.push(player);
+      currentRound.remainingCount[player] = Number(words[8]);
+
+      if (currentRound.outOrder.length == 1) {
+        game.playerStats[player].wins += 1;
+
+        if (currentRound.bets[player]) {
+          game.playerStats[player].successfulBets += 1;
+        }
+        if (player === currentRound.startPlayer) {
+          game.playerStats[player].ledAndWon += 1;
+        }
       }
-      if (player === currentRound.startPlayer) {
-        game.playerStats[player].ledAndWon += 1;
-      }
+
       continue;
     }
 
     if (line.includes("The end of the game")) {
       game.winner = words[5];
-
-      for (const name of game.players) {
-        game.playerStats[name].sumAvg =
-          game.playerStats[name].sumTotal / game.rounds.length;
-        let min = 999999;
-        let max = 0;
-        for (const round of game.rounds) {
-          const sum = round.sums[name];
-          if (sum > max) {
-            max = sum;
-          }
-          if (sum < min) {
-            min = sum;
-          }
-        }
-        game.playerStats[name].sumMin = min;
-        game.playerStats[name].sumMax = max;
+      if (game.playerCount === 4) {
+        const team = identifyTeam(words[5], game);
+        game.winner = team;
       }
-
-      for (const round of game.rounds) {
-        if (round.sums[game.players[0]] < round.sums[game.players[1]]) {
-          game.playerStats[game.players[1]].largerSum += 1;
-        } else if (round.sums[game.players[0]] > round.sums[game.players[1]]) {
-          game.playerStats[game.players[0]].largerSum += 1;
-        }
-      }
-
       break;
+    }
+
+    if (line.includes("concedes the game")) {
+      game.conceder = player;
+      game.rounds.pop(); // remove empty stats from last round - can't be parsed
     }
 
     for (const name of game.players) {
       if (name + ":" === player) {
         for (const word of words) {
-          const card = word.substring(0, word.length - 1);
+          const card = word.endsWith(",") ? word.substring(0, word.length - 1) : word;
           const parsedCard = parseCard(card);
-
           if (!parsedCard) {
             continue;
           }
@@ -199,13 +265,43 @@ function parseLog(logLines) {
       }
     }
   }
-    return game;
+
+  addSumStats(game);
+  return game;
+}
+
+function addSumStats(game) {
+  for (const name of game.players) {
+    game.playerStats[name].sumAvg = game.playerStats[name].sumTotal / game.rounds.length;
+    let min = 999999;
+    let max = 0;
+    for (const round of game.rounds) {
+      const sum = round.sums[name];
+      if (sum > max) {
+        max = sum;
+      }
+      if (sum < min) {
+        min = sum;
+      }
+    }
+    game.playerStats[name].sumMin = min;
+    game.playerStats[name].sumMax = max;
+  }
+
+  if (game.playerCount === 2) {
+    for (const round of game.rounds) {
+      if (round.sums[game.players[0]] < round.sums[game.players[1]]) {
+        game.playerStats[game.players[1]].largerSum += 1;
+      } else if (round.sums[game.players[0]] > round.sums[game.players[1]]) {
+        game.playerStats[game.players[0]].largerSum += 1;
+      }
+    }
+  }
 }
 
 function createPlayerStats() {
   return {
     tens: 0,
-    bombs: 0,
     colorBombs: 0,
     rainbowBombs: 0,
     bets: {},
@@ -213,6 +309,9 @@ function createPlayerStats() {
     successfulBets: 0,
     wins: 0,
     score: 0,
+    pointsFromCards: 0,
+    pointsFromBets: 0,
+    pointsFromRemaining: 0,
     led: 0,
     ledAndWon: 0,
     sumTotal: 0,
@@ -220,6 +319,7 @@ function createPlayerStats() {
     sumMax: 0,
     sumAvg: 0,
     largerSum: 0,
+    slams: 0,
   };
 }
 
@@ -232,7 +332,16 @@ function createCardMap() {
   }
 }
 
-function renderStatsAsHtmlString(tableId, stats) {
+function identifyTeam(player, game) {
+  for (const team in game.teams) {
+    if (game.teams[team].includes(player)) {
+      return team;
+    }
+  }
+  return null;
+}
+
+function render2pStatsAsHtmlString(tableId, stats) {
   const player1 = stats.players[0];
   const player2 = stats.players[1];
   const player1Stats = stats.playerStats[player1];
@@ -244,6 +353,14 @@ function renderStatsAsHtmlString(tableId, stats) {
   output += "    <td>Winner</td>\n";
   output += `    <td>${stats.winner}</td>\n`;
   output += "  </tr>\n";
+
+  if (stats.conceder) {
+    output += "  <tr>\n";
+    output += "    <td>Conceder</td>\n";
+    output += `    <td>${stats.conceder}</td>\n`;
+    output += "  </tr>\n";
+  }
+
   output += "  <tr>\n";
   output += "    <td>Rounds</td>\n";
   output += `    <td>${stats.rounds.length}</td>\n`;
@@ -261,6 +378,26 @@ function renderStatsAsHtmlString(tableId, stats) {
   output += `    <td>${player1Stats.score}</td>\n`;
   output += `    <td>${player2Stats.score}</td>\n`;
   output += "  </tr>\n";
+
+  // This was added much later
+  if (Object.hasOwn(player1Stats, "pointsFromCards")) {
+    output += "  <tr>\n";
+    output += "    <td>Points From Cards</td>\n";
+    output += `    <td>${player1Stats.pointsFromCards}</td>\n`;
+    output += `    <td>${player2Stats.pointsFromCards}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Points From Remaining</td>\n";
+    output += `    <td>${player1Stats.pointsFromRemaining}</td>\n`;
+    output += `    <td>${player2Stats.pointsFromRemaining}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Points From Bets</td>\n";
+    output += `    <td>${player1Stats.pointsFromBets}</td>\n`;
+    output += `    <td>${player2Stats.pointsFromBets}</td>\n`;
+    output += "  </tr>\n";
+  }
+
   output += "  <tr>\n";
   output += "    <td>Bets (w/t)</td>\n";
   output += `    <td>${player1Stats.successfulBets}/${player1Stats.totalBets}</td>\n`;
@@ -302,25 +439,25 @@ function renderStatsAsHtmlString(tableId, stats) {
   output += `    <td>${player2Stats.tens}</td>\n`;
   output += "  </tr>\n";
   output += "  <tr>\n";
-  output += "    <td>Color Bombs</td>\n";
-  output += `    <td>${player1Stats.colorBombs}</td>\n`;
-  output += `    <td>${player2Stats.colorBombs}</td>\n`;
-  output += "  </tr>\n";
-  output += "  <tr>\n";
   output += "    <td>Rainbow Bombs</td>\n";
   output += `    <td>${player1Stats.rainbowBombs}</td>\n`;
   output += `    <td>${player2Stats.rainbowBombs}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Color Bombs</td>\n";
+  output += `    <td>${player1Stats.colorBombs}</td>\n`;
+  output += `    <td>${player2Stats.colorBombs}</td>\n`;
   output += "  </tr>\n";
   output += "  <tr>\n";
   output += "    <td>Card Sum</td>\n";
   output += `    <td>${player1Stats.sumTotal}</td>\n`;
   output += `    <td>${player2Stats.sumTotal}</td>\n`;
   output += "  </tr>\n";
+  output += "  <tr>\n";
   output += "    <td>Rounds with > Sum</td>\n";
   output += `    <td>${player1Stats.largerSum}</td>\n`;
   output += `    <td>${player2Stats.largerSum}</td>\n`;
   output += "  </tr>\n";
-  output += "  <tr>\n";
   output += "  <tr>\n";
   output += "    <td>Card Sum Avg</td>\n";
   output += `    <td>${player1Stats.sumAvg.toFixed(2)}</td>\n`;
@@ -342,6 +479,7 @@ function renderStatsAsHtmlString(tableId, stats) {
 
   for (const i in stats.rounds) {
     const round = stats.rounds[i];
+
     output += `<h4>Round ${Number(i) + 1}</h4>\n`;
     output += "<table>\n";
     output += "  <tr>\n";
@@ -350,11 +488,11 @@ function renderStatsAsHtmlString(tableId, stats) {
     output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>Out First</td>\n";
-    output += `    <td>${round.winner}</td>\n`;
+    output += `    <td>${round.outOrder[0]}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>Remaining Cards</td>\n";
-    output += `    <td>${round.remainingCards}</td>\n`;
+    output += `    <td>${round.remainingCount[round.outOrder[0]]}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>Card Sum Diff</td>\n";
@@ -366,11 +504,17 @@ function renderStatsAsHtmlString(tableId, stats) {
 
     output += "<table class='shaded'>\n";
     output += "  <thead>\n";
-    output += `    <th></th>\n`;
+    output += "    <th></th>\n";
     output += `    <th>${player1}</th>\n`;
     output += `    <th>${player2}</th>\n`;
     output += "  </thead>\n";
-    output += "    <td>Points</td>\n";
+    output += "  <tr>\n";
+    output += "    <td>Starting Score</td>\n";
+    output += `    <td>${round.startingScore[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.startingScore[player2] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Points Gained</td>\n";
     output += `    <td>${round.points[player1] ?? 0}</td>\n`;
     output += `    <td>${round.points[player2] ?? 0}</td>\n`;
     output += "  </tr>\n";
@@ -378,6 +522,12 @@ function renderStatsAsHtmlString(tableId, stats) {
     output += "    <td>Bets</td>\n";
     output += `    <td>${round.bets[player1] ?? "NA"}</td>\n`;
     output += `    <td>${round.bets[player2] ?? "NA"}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Card Sum</td>\n";
+    output += `    <td>${round.sums[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.sums[player2] ?? 0}</td>\n`;
+    output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>10s</td>\n";
     output += `    <td>${round.tens[player1] ?? 0}</td>\n`;
@@ -392,11 +542,6 @@ function renderStatsAsHtmlString(tableId, stats) {
     output += "    <td>Color Bombs</td>\n";
     output += `    <td>${round.colorBombs[player1] ?? 0}</td>\n`;
     output += `    <td>${round.colorBombs[player2] ?? 0}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Card Sum</td>\n";
-    output += `    <td>${round.sums[player1] ?? 0}</td>\n`;
-    output += `    <td>${round.sums[player2] ?? 0}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>Blue</td>\n";
@@ -417,6 +562,353 @@ function renderStatsAsHtmlString(tableId, stats) {
     output += "    <td>Yellow</td>\n";
     output += `    <td>${round.hand[player1].y.sort(sortNumeric).join(', ')}</td>\n`;
     output += `    <td>${round.hand[player2].y.sort(sortNumeric).join(', ')}</td>\n`;
+    output += "  </tr>\n";
+    output += "</table>\n";
+  }
+
+  output += "</div>\n";
+
+  return output;
+}
+
+function render4pStatsAsHtmlString(tableId, stats) {
+  const team1Name = `${stats.teams.team1[0]}/${stats.teams.team1[1]}`;
+  const team2Name = `${stats.teams.team2[0]}/${stats.teams.team2[1]}`;
+
+  const player1 = stats.teams.team1[0];
+  const player2 = stats.teams.team1[1];
+  const player3 = stats.teams.team2[0];
+  const player4 = stats.teams.team2[1];
+  const player1Stats = stats.playerStats[player1];
+  const player2Stats = stats.playerStats[player2];
+  const player3Stats = stats.playerStats[player3];
+  const player4Stats = stats.playerStats[player4];
+
+  let output = `<div>\n<h2>Game ${tableId}</h2>\n`;
+  output += "<table>\n";
+  output += "  <tr>\n";
+  output += "    <td>Winner</td>\n";
+
+  if (stats.winner === "team1") {
+    output += `    <td>${team1Name}</td>\n`;
+  } else {
+    output += `    <td>${team2Name}</td>\n`;
+  }
+
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Rounds</td>\n";
+  output += `    <td>${stats.rounds.length}</td>\n`;
+  output += "  </tr>\n";
+  output += "</table>\n";
+
+  output += "<div>\n<h3>Teams</h3>\n";
+  output += "<table class='shaded'>\n";
+  output += "  <tr>\n";
+  output += "    <th></th>\n";
+  output += `    <th>${team1Name}</th>\n`;
+  output += `    <th>${team2Name}</th>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Score</td>\n";
+  output += `    <td>${player1Stats.score + player2Stats.score}</td>\n`;
+  output += `    <td>${player3Stats.score + player4Stats.score}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Bets (w/t)</td>\n";
+  output += `    <td>${player1Stats.successfulBets + player2Stats.successfulBets}/${player1Stats.totalBets + player2Stats.totalBets}</td>\n`;
+  output += `    <td>${player3Stats.successfulBets + player4Stats.successfulBets}/${player3Stats.totalBets + player4Stats.totalBets}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>5 Bets</td>\n";
+  output += `    <td>${(player1Stats.bets["5"] ?? 0) + (player2Stats.bets["5"] ?? 0)}</td>\n`;
+  output += `    <td>${(player3Stats.bets["5"] ?? 0) + (player4Stats.bets["5"] ?? 0)}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>15 Bets</td>\n";
+  output += `    <td>${(player1Stats.bets["15"] ?? 0) + (player2Stats.bets["15"] ?? 0)}</td>\n`;
+  output += `    <td>${(player3Stats.bets["15"] ?? 0) + (player4Stats.bets["15"] ?? 0)}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>30 Bets</td>\n";
+  output += `    <td>${(player1Stats.bets["30"] ?? 0) + (player2Stats.bets["30"] ?? 0)}</td>\n`;
+  output += `    <td>${(player3Stats.bets["30"] ?? 0) + (player4Stats.bets["30"] ?? 0)}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Out First</td>\n";
+  output += `    <td>${player1Stats.wins + player2Stats.wins}</td>\n`;
+  output += `    <td>${player3Stats.wins + player4Stats.wins}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Slams</td>\n";
+  output += `    <td>${player1Stats.slams + player2Stats.slams}</td>\n`;
+  output += `    <td>${player3Stats.slams + player4Stats.slams}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Started</td>\n";
+  output += `    <td>${player1Stats.led + player2Stats.led}</td>\n`;
+  output += `    <td>${player3Stats.led + player4Stats.led}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Started & Out First</td>\n";
+  output += `    <td>${player1Stats.ledAndWon + player2Stats.ledAndWon}</td>\n`;
+  output += `    <td>${player3Stats.ledAndWon + player4Stats.ledAndWon}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>10s</td>\n";
+  output += `    <td>${player1Stats.tens + player2Stats.tens}</td>\n`;
+  output += `    <td>${player3Stats.tens + player4Stats.tens}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Rainbow Bombs</td>\n";
+  output += `    <td>${player1Stats.rainbowBombs + player2Stats.rainbowBombs}</td>\n`;
+  output += `    <td>${player3Stats.rainbowBombs + player4Stats.rainbowBombs}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Color Bombs</td>\n";
+  output += `    <td>${player1Stats.colorBombs + player2Stats.colorBombs}</td>\n`;
+  output += `    <td>${player3Stats.colorBombs + player4Stats.colorBombs}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Card Sum</td>\n";
+  output += `    <td>${player1Stats.sumTotal + player2Stats.sumTotal}</td>\n`;
+  output += `    <td>${player3Stats.sumTotal + player4Stats.sumTotal}</td>\n`;
+  output += "  </tr>\n";
+  output += "</table>\n</div>\n";
+
+  output += "<div>\n<h3>Players</h3>\n";
+  output += "<table class='shaded'>\n";
+  output += "  <tr>\n";
+  output += `    <th></th>\n`;
+  output += `    <th>${player1}</th>\n`;
+  output += `    <th>${player2}</th>\n`;
+  output += `    <th>${player3}</th>\n`;
+  output += `    <th>${player4}</th>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Bets (w/t)</td>\n";
+  output += `    <td>${player1Stats.successfulBets}/${player1Stats.totalBets}</td>\n`;
+  output += `    <td>${player2Stats.successfulBets}/${player2Stats.totalBets}</td>\n`;
+  output += `    <td>${player3Stats.successfulBets}/${player3Stats.totalBets}</td>\n`;
+  output += `    <td>${player4Stats.successfulBets}/${player4Stats.totalBets}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>5 Bets</td>\n";
+  output += `    <td>${player1Stats.bets["5"] ?? 0}</td>\n`;
+  output += `    <td>${player2Stats.bets["5"] ?? 0}</td>\n`;
+  output += `    <td>${player3Stats.bets["5"] ?? 0}</td>\n`;
+  output += `    <td>${player4Stats.bets["5"] ?? 0}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>15 Bets</td>\n";
+  output += `    <td>${player1Stats.bets["15"] ?? 0}</td>\n`;
+  output += `    <td>${player2Stats.bets["15"] ?? 0}</td>\n`;
+  output += `    <td>${player3Stats.bets["15"] ?? 0}</td>\n`;
+  output += `    <td>${player4Stats.bets["15"] ?? 0}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>30 Bets</td>\n";
+  output += `    <td>${player1Stats.bets["30"] ?? 0}</td>\n`;
+  output += `    <td>${player2Stats.bets["30"] ?? 0}</td>\n`;
+  output += `    <td>${player3Stats.bets["30"] ?? 0}</td>\n`;
+  output += `    <td>${player4Stats.bets["30"] ?? 0}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Out First</td>\n";
+  output += `    <td>${player1Stats.wins}</td>\n`;
+  output += `    <td>${player2Stats.wins}</td>\n`;
+  output += `    <td>${player3Stats.wins}</td>\n`;
+  output += `    <td>${player4Stats.wins}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Started</td>\n";
+  output += `    <td>${player1Stats.led}</td>\n`;
+  output += `    <td>${player2Stats.led}</td>\n`;
+  output += `    <td>${player3Stats.led}</td>\n`;
+  output += `    <td>${player4Stats.led}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Started & Out First</td>\n";
+  output += `    <td>${player1Stats.ledAndWon}</td>\n`;
+  output += `    <td>${player2Stats.ledAndWon}</td>\n`;
+  output += `    <td>${player3Stats.ledAndWon}</td>\n`;
+  output += `    <td>${player4Stats.ledAndWon}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>10s</td>\n";
+  output += `    <td>${player1Stats.tens}</td>\n`;
+  output += `    <td>${player2Stats.tens}</td>\n`;
+  output += `    <td>${player3Stats.tens}</td>\n`;
+  output += `    <td>${player4Stats.tens}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Rainbow Bombs</td>\n";
+  output += `    <td>${player1Stats.rainbowBombs}</td>\n`;
+  output += `    <td>${player2Stats.rainbowBombs}</td>\n`;
+  output += `    <td>${player3Stats.rainbowBombs}</td>\n`;
+  output += `    <td>${player4Stats.rainbowBombs}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Color Bombs</td>\n";
+  output += `    <td>${player1Stats.colorBombs}</td>\n`;
+  output += `    <td>${player2Stats.colorBombs}</td>\n`;
+  output += `    <td>${player3Stats.colorBombs}</td>\n`;
+  output += `    <td>${player4Stats.colorBombs}</td>\n`;
+  output += "  </tr>\n";
+  output += "  <tr>\n";
+  output += "    <td>Card Sum</td>\n";
+  output += `    <td>${player1Stats.sumTotal}</td>\n`;
+  output += `    <td>${player2Stats.sumTotal}</td>\n`;
+  output += `    <td>${player3Stats.sumTotal}</td>\n`;
+  output += `    <td>${player4Stats.sumTotal}</td>\n`;
+  output += "  </tr>\n";
+  output += "</table>\n</div>\n</div>\n";
+
+  output += "<div>\n<h3>Rounds</h3>\n";
+
+  for (const i in stats.rounds) {
+    const round = stats.rounds[i];
+
+    output += `<h4>Round ${Number(i) + 1}</h4>\n`;
+    output += "<table>\n";
+    output += "  <tr>\n";
+    output += "    <td>Started</td>\n";
+    output += `    <td>${round.startPlayer}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Out First</td>\n";
+    output += `    <td>${round.outOrder[0]}</td>\n`;
+    output += "  </tr>\n";
+    output += "</table>\n";
+
+    output += "<h5>Teams</h5>\n";
+    output += "<table class='shaded'>\n";
+    output += "  <tr>\n";
+    output += "    <th></th>\n";
+    output += `    <th>${team1Name}</th>\n`;
+    output += `    <th>${team2Name}</th>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += `    <td>Starting Score</td>\n`;
+    output += `    <td>${round.startingScore[player1] + round.startingScore[player2]}</td>\n`;
+    output += `    <td>${round.startingScore[player3] + round.startingScore[player4]}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += `    <td>Points Gained</td>\n`;
+    output += `    <td>${(round.points[player1] ?? 0) + (round.points[player2] ?? 0)}</td>\n`;
+    output += `    <td>${(round.points[player3] ?? 0) + (round.points[player4] ?? 0)}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Bets</td>\n";
+    output += `    <td>${round.bets[player1] ?? round.bets[player2] ?? "NA"}</td>\n`;
+    output += `    <td>${round.bets[player3] ?? round.bets[player4] ?? "NA"}</td>\n`;
+    output += "  <tr>\n";
+    output += "    <td>10s</td>\n";
+    output += `    <td>${(round.tens[player1] ?? 0) + (round.tens[player2] ?? 0)}</td>\n`;
+    output += `    <td>${(round.tens[player3] ?? 0) + (round.tens[player4] ?? 0)}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Rainbow Bombs</td>\n";
+    output += `    <td>${(round.rainbowBombs[player1] ?? 0) + (round.rainbowBombs[player2] ?? 0)}</td>\n`;
+    output += `    <td>${(round.rainbowBombs[player3] ?? 0) + (round.rainbowBombs[player4] ?? 0)}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Color Bombs</td>\n";
+    output += `    <td>${(round.colorBombs[player1] ?? 0) + (round.colorBombs[player2] ?? 0)}</td>\n`;
+    output += `    <td>${(round.colorBombs[player3] ?? 0) + (round.colorBombs[player4] ?? 0)}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Card Sum</td>\n";
+    output += `    <td>${(round.sums[player1] ?? 0) + (round.sums[player2] ?? 0)}</td>\n`;
+    output += `    <td>${(round.sums[player3] ?? 0) + (round.sums[player4] ?? 0)}</td>\n`;
+    output += "  </tr>\n";
+    output += "</table>\n";
+
+    output += "<h5>Players</h5>\n";
+    output += "<table class='shaded'>\n";
+    output += "  <thead>\n";
+    output += "    <th></th>\n";
+    output += `    <th>${player1}</th>\n`;
+    output += `    <th>${player2}</th>\n`;
+    output += `    <th>${player3}</th>\n`;
+    output += `    <th>${player4}</th>\n`;
+    output += "  </thead>\n";
+    output += "  <tr>\n";
+    output += "    <td>Bets</td>\n";
+    output += `    <td>${round.bets[player1] ?? "NA"}</td>\n`;
+    output += `    <td>${round.bets[player2] ?? "NA"}</td>\n`;
+    output += `    <td>${round.bets[player3] ?? "NA"}</td>\n`;
+    output += `    <td>${round.bets[player4] ?? "NA"}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Out</td>\n";
+    output += `    <td>${round.outOrder.indexOf(player1) + 1}</td>\n`;
+    output += `    <td>${round.outOrder.indexOf(player2) + 1}</td>\n`;
+    output += `    <td>${round.outOrder.indexOf(player3) + 1}</td>\n`;
+    output += `    <td>${round.outOrder.indexOf(player4) + 1}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Remaining Cards</td>\n";
+    output += `    <td>${round.remainingCount[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.remainingCount[player2] ?? 0}</td>\n`;
+    output += `    <td>${round.remainingCount[player3] ?? 0}</td>\n`;
+    output += `    <td>${round.remainingCount[player4] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>10s</td>\n";
+    output += `    <td>${round.tens[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.tens[player2] ?? 0}</td>\n`;
+    output += `    <td>${round.tens[player3] ?? 0}</td>\n`;
+    output += `    <td>${round.tens[player4] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Rainbow Bombs</td>\n";
+    output += `    <td>${round.rainbowBombs[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.rainbowBombs[player2] ?? 0}</td>\n`;
+    output += `    <td>${round.rainbowBombs[player3] ?? 0}</td>\n`;
+    output += `    <td>${round.rainbowBombs[player4] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Color Bombs</td>\n";
+    output += `    <td>${round.colorBombs[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.colorBombs[player2] ?? 0}</td>\n`;
+    output += `    <td>${round.colorBombs[player3] ?? 0}</td>\n`;
+    output += `    <td>${round.colorBombs[player4] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Card Sum</td>\n";
+    output += `    <td>${round.sums[player1] ?? 0}</td>\n`;
+    output += `    <td>${round.sums[player2] ?? 0}</td>\n`;
+    output += `    <td>${round.sums[player3] ?? 0}</td>\n`;
+    output += `    <td>${round.sums[player4] ?? 0}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Blue</td>\n";
+    output += `    <td>${round.hand[player1].b.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player2].b.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player3].b.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player4].b.sort(sortNumeric).join(', ')}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Purple</td>\n";
+    output += `    <td>${round.hand[player1].p.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player2].p.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player3].p.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player4].p.sort(sortNumeric).join(', ')}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Red</td>\n";
+    output += `    <td>${round.hand[player1].r.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player2].r.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player3].r.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player4].r.sort(sortNumeric).join(', ')}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
+    output += "    <td>Yellow</td>\n";
+    output += `    <td>${round.hand[player1].y.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player2].y.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player3].y.sort(sortNumeric).join(', ')}</td>\n`;
+    output += `    <td>${round.hand[player4].y.sort(sortNumeric).join(', ')}</td>\n`;
     output += "  </tr>\n";
     output += "</table>\n";
   }
@@ -470,13 +962,7 @@ function extractGameData(htmlString) {
 
   for (const el of doc.querySelectorAll('.gamelogreview')) {
     const innerHtml = el.innerHTML;
-
-//    if (innerHtml.includes(" remaining cards ")) {
-//      log(innerHtml);
-//    }
-
     if (innerHtml.includes("<br")) {
-      log(innerHtml);
       convertBr2nl(innerHtml).split("\n").forEach(l => lines.push(l));
     } else {
       lines.push(el.textContent);
@@ -509,9 +995,12 @@ function addColorData(doc) {
 
 function parseCard(text) {
   if (/^[rbpy]\d+/.test(text)) {
-    return {
-      suit: text.charAt(0),
-      rank: Number(text.slice(1))
+    const rank = Number(text.slice(1));
+    if (!isNaN(rank)) {
+      return {
+        suit: text.charAt(0),
+        rank: rank
+      }
     }
   }
   return null;
@@ -544,8 +1033,6 @@ document.addEventListener("paste", async function (event) {
 
   const logData = extractGameData(serializedLogs);
 
-  logData.forEach(l => log(l));
-
   const textArea = document.getElementById("allLogs");
   textArea.textContent = JSON.stringify(logData);
 });
@@ -553,11 +1040,8 @@ document.addEventListener("paste", async function (event) {
 function convertBr2nl(innerHtml) {
   const parser = new DOMParser();
   const modified = "<div>" + innerHtml.replaceAll("&nbsp;", " ").replaceAll(/<br[^<>]*?>/g, "||BR||") + "</div>";
-//  log(modified);
   const newDoc = parser.parseFromString(modified, "text/xml");
-  const final = newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
-//  final.split("\n").forEach(l => log(l));
-  return final;
+  return newDoc.firstElementChild.textContent.replaceAll("||BR||", "\n");
 }
 
 function extractTableId(doc) {
@@ -566,12 +1050,4 @@ function extractTableId(doc) {
 
 function sortNumeric(a, b) {
   return a - b;
-}
-
-function log(stuff) {
-  const logDir = document.getElementById("log");
-  const d = document.createElement("div");
-  d.setAttribute("style", "padding: 10px");
-  d.appendChild(document.createTextNode(stuff));
-  logDir.appendChild(d);
 }
