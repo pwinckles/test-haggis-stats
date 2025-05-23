@@ -382,17 +382,17 @@ function render2pStatsAsHtmlString(tableId, stats) {
   // This was added much later
   if (Object.hasOwn(player1Stats, "pointsFromCards")) {
     output += "  <tr>\n";
-    output += "    <td>Points From Cards</td>\n";
+    output += "    <td>Card Points</td>\n";
     output += `    <td>${player1Stats.pointsFromCards}</td>\n`;
     output += `    <td>${player2Stats.pointsFromCards}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
-    output += "    <td>Points From Remaining</td>\n";
+    output += "    <td>5x Card Points</td>\n";
     output += `    <td>${player1Stats.pointsFromRemaining}</td>\n`;
     output += `    <td>${player2Stats.pointsFromRemaining}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
-    output += "    <td>Points From Bets</td>\n";
+    output += "    <td>Bet Points</td>\n";
     output += `    <td>${player1Stats.pointsFromBets}</td>\n`;
     output += `    <td>${player2Stats.pointsFromBets}</td>\n`;
     output += "  </tr>\n";
