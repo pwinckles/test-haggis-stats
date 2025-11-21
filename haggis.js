@@ -1146,11 +1146,12 @@ function computeChartData(rounds, field, player) {
     for (const i in rounds) {
         const round = rounds[i];
         const currentValue = round[field][player] ?? 0;
-        if (i == 0) {
-            result.push(currentValue);
-        } else {
-            result.push(currentValue + result[i - 1]);
-        }
+        result.push(currentValue);
+        // if (i == 0) {
+        //     result.push(currentValue);
+        // } else {
+        //     result.push(currentValue + result[i - 1]);
+        // }
     }
     return result;
 }
