@@ -1054,20 +1054,46 @@ function render2pCharts(stats) {
         labels.push(i);
     }
 
-    render2pSimpleChart(stats, labels, 'points', 'scoreChart', 'Score');
-    render2pSimpleChart(stats, labels, 'sums', 'sumChart', 'Card Sum');
-    render2pSimpleChart(stats, labels, 'tens', 'tenChart', '10 Count');
-    render2pBombChart(stats, labels);
+    render2pChartsByType(stats, labels, true);
+
+    const selectElement = document.querySelector("#chartType");
+    selectElement.addEventListener("change", (event) => {
+        removeAll2pCharts();
+        render2pChartsByType(stats, labels, "Cumulative" === event.target.value);
+    });
 }
 
-function render2pSimpleChart(stats, labels, field, divId, title) {
+function removeAll2pCharts() {
+    const chartIds = ['scoreChart', 'sumChart', 'tenChart', 'bombChart'];
+    for (const chart of chartIds) {
+        removeChart(chart);
+    }
+}
+
+function removeChart(canvasId) {
+    const old = document.getElementById(canvasId);
+    const newCanvas = document.createElement('canvas');
+    newCanvas.id = canvasId;
+    const div = old.parentElement;
+    old.remove()
+    div.appendChild(newCanvas);
+}
+
+function render2pChartsByType(stats, labels, cumulative) {
+    render2pSimpleChart(stats, labels, 'points', 'scoreChart', 'Points', cumulative);
+    render2pSimpleChart(stats, labels, 'sums', 'sumChart', 'Card Sum', cumulative);
+    render2pSimpleChart(stats, labels, 'tens', 'tenChart', '10 Count', cumulative);
+    render2pBombChart(stats, labels, 'bombChart', cumulative);
+}
+
+function render2pSimpleChart(stats, labels, field, canvasId, title, cumulative) {
     const player1 = stats.players[0];
     const player2 = stats.players[1];
 
-    const player1Data = computeChartData(stats.rounds, field, player1);
-    const player2Data = computeChartData(stats.rounds, field, player2);
+    const player1Data = computeChartData(stats.rounds, field, player1, cumulative);
+    const player2Data = computeChartData(stats.rounds, field, player2, cumulative);
 
-    const ctx = document.getElementById(divId);
+    const ctx = document.getElementById(canvasId);
 
     new Chart(ctx, {
         type: 'line',
@@ -1083,6 +1109,14 @@ function render2pSimpleChart(stats, labels, field, divId, title) {
         },
         options: {
             responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        text: 'Round',
+                        display: true
+                    }
+                }
+            },
             plugins: {
                 legend: {
                     position: 'top',
@@ -1096,14 +1130,14 @@ function render2pSimpleChart(stats, labels, field, divId, title) {
     });
 }
 
-function render2pBombChart(stats, labels) {
+function render2pBombChart(stats, labels, canvasId, cumulative) {
     const player1 = stats.players[0];
     const player2 = stats.players[1];
 
-    const player1RainbowData = computeChartData(stats.rounds, 'rainbowBombs', player1);
-    const player2RainbowData = computeChartData(stats.rounds, 'rainbowBombs', player2);
-    const player1ColorData = computeChartData(stats.rounds, 'colorBombs', player1);
-    const player2ColorData = computeChartData(stats.rounds, 'colorBombs', player2);
+    const player1RainbowData = computeChartData(stats.rounds, 'rainbowBombs', player1, cumulative);
+    const player2RainbowData = computeChartData(stats.rounds, 'rainbowBombs', player2, cumulative);
+    const player1ColorData = computeChartData(stats.rounds, 'colorBombs', player1, cumulative);
+    const player2ColorData = computeChartData(stats.rounds, 'colorBombs', player2, cumulative);
 
     const player1Data = [];
     const player2Data = [];
@@ -1112,7 +1146,7 @@ function render2pBombChart(stats, labels) {
         player2Data.push(player2RainbowData[i] + player2ColorData[i]);
     }
 
-    const ctx = document.getElementById('bombChart');
+    const ctx = document.getElementById(canvasId);
 
     new Chart(ctx, {
         type: 'line',
@@ -1128,6 +1162,14 @@ function render2pBombChart(stats, labels) {
         },
         options: {
             responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        text: 'Round',
+                        display: true
+                    }
+                }
+            },
             plugins: {
                 legend: {
                     position: 'top',
@@ -1141,17 +1183,16 @@ function render2pBombChart(stats, labels) {
     });
 }
 
-function computeChartData(rounds, field, player) {
+function computeChartData(rounds, field, player, cumulative) {
     const result = [];
     for (const i in rounds) {
         const round = rounds[i];
         const currentValue = round[field][player] ?? 0;
-        result.push(currentValue);
-        // if (i == 0) {
-        //     result.push(currentValue);
-        // } else {
-        //     result.push(currentValue + result[i - 1]);
-        // }
+        if (!cumulative || i == 0) {
+            result.push(currentValue);
+        } else {
+            result.push(currentValue + result[i - 1]);
+        }
     }
     return result;
 }
