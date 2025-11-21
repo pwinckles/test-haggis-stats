@@ -1054,7 +1054,7 @@ function render2pCharts(stats) {
         labels.push(i);
     }
 
-    render2pSimpleChart(stats, labels, 'points', 'scoreChart', 'Starting Score');
+    render2pSimpleChart(stats, labels, 'points', 'scoreChart', 'Score');
     render2pSimpleChart(stats, labels, 'sums', 'sumChart', 'Card Sum');
     render2pSimpleChart(stats, labels, 'tens', 'tenChart', '10 Count');
     render2pBombChart(stats, labels);
