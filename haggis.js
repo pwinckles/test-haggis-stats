@@ -1048,6 +1048,8 @@ function sortNumeric(a, b) {
 }
 
 function render2pCharts(stats) {
+    appendChartElements();
+
     const labels = [];
 
     for (let i = 1; i <= stats.rounds.length; i++) {
@@ -1061,6 +1063,37 @@ function render2pCharts(stats) {
         removeAll2pCharts();
         render2pChartsByType(stats, labels, "Cumulative" === event.target.value);
     });
+}
+
+function appendChartElements() {
+    const heading = document.createElement("h2");
+    heading.textContent = 'Charts';
+    document.body.appendChild(heading);
+
+    const select = document.createElement('select');
+    select.id = 'chartType';
+    select.name = 'chartType';
+    const cumulativeOption = document.createElement('option');
+    cumulativeOption.textContent = 'Cumulative';
+    const nonCumulativeOption = document.createElement('option');
+    nonCumulativeOption.textContent = 'Noncumulative';
+    select.appendChild(cumulativeOption);
+    select.appendChild(nonCumulativeOption);
+    document.body.appendChild(select);
+
+    appendChartAnchor('scoreChart');
+    appendChartAnchor('sumChart');
+    appendChartAnchor('tenChart');
+    appendChartAnchor('bombChart');
+}
+
+function appendChartAnchor(id) {
+    const div = document.createElement('div');
+    div.className = 'chart';
+    const canvas = document.createElement('canvas');
+    canvas.id = id;
+    div.appendChild(canvas);
+    document.body.appendChild(div);
 }
 
 function removeAll2pCharts() {

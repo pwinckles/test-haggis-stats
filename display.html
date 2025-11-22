@@ -2,7 +2,7 @@
 <html lang="en">
     <head>
         <title>Haggis Stats</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script type="text/javascript" src="chart.js"></script>
         <script type="text/javascript" src="haggis.js"></script>
         <style>
             table {
@@ -53,22 +53,5 @@
             <li><a id="bgaLink" href="https://boardgamearena.com/table?table=">Table on BGA</a></li>
         </ul>
         <div id="stats"></div>
-        <h1>Charts</h1>
-        <select id="chartType" name="chartType">
-            <option>Cumulative</option>
-            <option>Noncumulative</option>
-        </select>
-        <div class="chart">
-            <canvas id="scoreChart"></canvas>
-        </div>
-        <div class="chart">
-            <canvas id="sumChart"></canvas>
-        </div>
-        <div class="chart">
-            <canvas id="tenChart"></canvas>
-        </div>
-        <div class="chart">
-            <canvas id="bombChart"></canvas>
-        </div>
     </body>
 </html>
