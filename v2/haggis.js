@@ -356,8 +356,8 @@ function computeStats(game) {
                     break;
                 }
                 case 'concedes': {
-                    // TODO verify this works
                     stats.conceder = player;
+                    stats.rounds.pop();
                     break;
                 }
             }
