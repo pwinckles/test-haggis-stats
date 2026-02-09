@@ -764,7 +764,7 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
                     break;
                 }
                 case 'scores': {
-                    const score = `Scores ${action.object.points} from ${action.object.reason}`;
+                    const score = `${action.object.points} fr ${action.object.reason}`;
                     const player1Action = isPlayer1 ? score : '';
                     const player2Action = !isPlayer1 ? score : '';
                     output += logRowHtml('', player1Action, player2Action, '');
