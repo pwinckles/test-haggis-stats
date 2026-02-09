@@ -723,7 +723,8 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
         output += "  </tr>\n";
         output += "</table>\n";
 
-        output += "<div>\n";
+        output += "<details>\n";
+        output += "  <summary>Log</summary>\n";
         output += "  <table class='shaded'>\n";
         output += "    <thead>\n";
         output += "      <tr>\n";
@@ -782,7 +783,7 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
         }
 
         output += "  </table>\n";
-        output += "</div>\n";
+        output += "</details>\n";
     }
 
     output += "</div>\n";
