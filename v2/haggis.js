@@ -380,13 +380,20 @@ function buildHands(game) {
 
 function buildHandsForRound(players, round) {
     const hands = {};
+    const bombs = {};
     for (const player of players) {
         hands[player] = [];
+        bombs[player] = [];
     }
     for (const action of round.actions) {
         switch (action.predicate) {
             case 'plays': {
-                hands[action.subject].push(...action.object.cards);
+                const cards = action.object.cards;
+                if (isColorBomb(cards) || isRainbowBomb(cards)) {
+                    bombs[action.subject].push(cards);
+                } else {
+                    hands[action.subject].push(...cards);
+                }
                 break;
             }
             case 'goes-out': {
@@ -398,6 +405,11 @@ function buildHandsForRound(players, round) {
     }
     for (const player of players) {
         hands[player].sort(sortCardsByRank);
+    }
+    for (const player of players) {
+        for (const bomb of bombs[player]) {
+            hands[player].unshift(...bomb);
+        }
     }
     return hands;
 }
