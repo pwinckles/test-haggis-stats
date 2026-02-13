@@ -842,7 +842,7 @@ function cardInList(card, cards) {
 function playToHtml(cards) {
     let output = "";
     for (const card of cards) {
-        output += `<span class="card-${lookupSuitColor(card)}">${card.rank}</span>-`;
+        output += `<span class="card card-${lookupSuitColor(card)}">${card.rank}</span>-`;
     }
     return output.substring(0, output.length - 2);
 }
@@ -850,7 +850,7 @@ function playToHtml(cards) {
 function handToHtml(hand) {
     let output = "";
     for (const card of hand) {
-        output += `<span class="card-${lookupSuitColor(card)}">${card.rank}</span>, `;
+        output += `<span class="card card-${lookupSuitColor(card)}">${card.rank}</span>, `;
     }
     return output.substring(0, output.length - 3);
 }
@@ -858,7 +858,7 @@ function handToHtml(hand) {
 function handToHtmlHighlightPlayed(hand, cardsPlayed) {
     let output = "";
     for (const card of hand) {
-        let classes = `card-${lookupSuitColor(card)}`;
+        let classes = `card card-${lookupSuitColor(card)}`;
         if (cardInList(card, cardsPlayed)) {
             classes += ' highlighted';
         }
