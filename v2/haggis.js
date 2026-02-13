@@ -762,9 +762,11 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
                 case 'plays': {
                     const cards = action.object.cards;
                     const playHtml = playToHtml(cards);
+                    const player1HandHtml = isPlayer1 ? handToHtmlHighlightPlayed(player1Hand, cards) : handToHtml(player1Hand);
+                    const player2HandHtml = !isPlayer1 ? handToHtmlHighlightPlayed(player2Hand, cards) : handToHtml(player2Hand);
                     const player1Action = isPlayer1 ? playHtml : '';
                     const player2Action = !isPlayer1 ? playHtml : '';
-                    output += logRowHtml(handToHtmlHighlightPlayed(player1Hand, cards), player1Action, player2Action, handToHtmlHighlightPlayed(player2Hand, cards));
+                    output += logRowHtml(player1HandHtml, player1Action, player2Action, player2HandHtml);
                     removeCardsFromHand(cards, hands[i][player]);
                     break;
                 }
