@@ -761,11 +761,11 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
             switch (action.predicate) {
                 case 'plays': {
                     const cards = action.object.cards;
-                    removeCardsFromHand(cards, hands[i][player]);
                     const playHtml = playToHtml(cards);
                     const player1Action = isPlayer1 ? playHtml : '';
                     const player2Action = !isPlayer1 ? playHtml : '';
-                    output += logRowHtml(handToHtml(player1Hand), player1Action, player2Action, handToHtml(player2Hand));
+                    output += logRowHtml(handToHtmlHighlightPlayed(player1Hand, cards), player1Action, player2Action, handToHtmlHighlightPlayed(player2Hand, cards));
+                    removeCardsFromHand(cards, hands[i][player]);
                     break;
                 }
                 case 'bets': {
@@ -830,6 +830,15 @@ function cardEquals(left, right) {
     return left.rank === right.rank && left.suit === right.suit;
 }
 
+function cardInList(card, cards) {
+    for (const c of cards) {
+        if (cardEquals(card, c)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function playToHtml(cards) {
     let output = "";
     for (const card of cards) {
@@ -842,6 +851,18 @@ function handToHtml(hand) {
     let output = "";
     for (const card of hand) {
         output += `<span class="card-${lookupSuitColor(card)}">${card.rank}</span>, `;
+    }
+    return output.substring(0, output.length - 3);
+}
+
+function handToHtmlHighlightPlayed(hand, cardsPlayed) {
+    let output = "";
+    for (const card of hand) {
+        let classes = `card-${lookupSuitColor(card)}`;
+        if (cardInList(card, cardsPlayed)) {
+            classes += ' highlighted';
+        }
+        output += `<span class="${classes}">${card.rank}</span>, `;
     }
     return output.substring(0, output.length - 3);
 }
