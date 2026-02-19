@@ -30,6 +30,8 @@ const STAIR_VALUES = {
 
 const COLOR_VALUE = 15;
 const RAINBOW_VALUE = 10;
+const COLOR_AND_RAINBOW_BONUS = 5;
+const DANGLER_VALUE = 1;
 
 const CARD_VALUES = {
     2: 0,
@@ -411,7 +413,7 @@ function computeStats(game, hands) {
     stats.winner = (stats.playerStats[game.players[0]].score > stats.playerStats[game.players[1]].score)
         ? game.players[0] : game.players[1];
 
-    for (let i = 0; i < hands.length; i++) {
+    for (let i = 0; i < stats.rounds.length; i++) {
         const roundStats = stats.rounds[i];
         for (const player of stats.players) {
             const hand = hands[i][player];
@@ -614,10 +616,50 @@ function isRainbowBomb(cards) {
     return cards[0].rank === 3 && cards[1].rank === 5 && cards[2].rank === 7 && cards[3].rank === 9;
 }
 
-function computeHandValue(hand) {
+function computeHandValue(originalHand) {
+    const hand = [...originalHand];
+    removeCardsFromHand([
+        {rank: 'J', suit: 'w'},
+        {rank: 'Q', suit: 'w'},
+        {rank: 'K', suit: 'w'},
+    ], hand);
+
+    const colorBombs = findColorBombs(hand);
+    const rainbowBombs = findRainbowBombs(hand);
+    const rainbowBombSets = createBombSets(rainbowBombs);
+
+    let value = 0;
+
+    if (colorBombs.length > 0 || rainbowBombs.length === 0) {
+        value = computeHandValueWithBombs(hand, colorBombs);
+        value += COLOR_VALUE * colorBombs.length;
+        if (rainbowBombs.length > 0) {
+            value += COLOR_AND_RAINBOW_BONUS;
+        }
+    } else {
+        let highValue = 0;
+        let highBombs = [];
+        for (const bombs of rainbowBombSets) {
+            let currentValue = computeHandValueWithBombs(hand, bombs);
+            currentValue += RAINBOW_VALUE * bombs.length;
+            if (currentValue > highValue) {
+                highValue = currentValue;
+                highBombs = bombs;
+            }
+        }
+        value = highValue;
+    }
+
+    return value;
+}
+
+function computeHandValueWithBombs(originalHand, bombs) {
+    const hand = [...originalHand];
+    for (const bomb of bombs) {
+        removeCardsFromHand(bomb, hand);
+    }
+
     const combos = countCombos(hand);
-    // TODO delete me
-    console.log(combos);
     let value = 0;
 
     for (const [set, count] of Object.entries(combos.sets)) {
@@ -630,8 +672,7 @@ function computeHandValue(hand) {
         value += STAIR_VALUES[stair] * count;
     }
 
-    value += combos.bombs.color * COLOR_VALUE;
-    value += combos.bombs.rainbow * RAINBOW_VALUE;
+    value += combos.danglers * DANGLER_VALUE;
 
     for (const card of hand) {
         if (card.suit !== 'w') {
@@ -668,11 +709,13 @@ function countCombos(hand) {
         bombs: {
             color: 0,
             rainbow: 0,
-        }
+        },
+        danglers: 0,
     };
 
     for (let i = 2; i < 11; i++) {
-        const previousSuits = cardsByRank[i-1] ?? [];
+        const previousSuits = cardsByRank[i - 1] ?? [];
+        const nextSuits = cardsByRank[i + 1] ?? [];
         const lengths = {};
 
         for (let j = cardsByRank[i].length; j > 0; j--) {
@@ -715,56 +758,93 @@ function countCombos(hand) {
                 }
             }
         }
-    }
 
-    combos.bombs.color = countColorBombs(cardsByRank);
-    combos.bombs.rainbow = countRainbowBombs(cardsByRank);
+        if (cardsByRank[i].length === 1
+            && (containSuits(cardsByRank[i], nextSuits) || containSuits(cardsByRank[i], previousSuits))
+            && !(containSuits(cardsByRank[i], nextSuits) && containSuits(cardsByRank[i], previousSuits))
+            && !containSuits(cardsByRank[i], (cardsByRank[i - 2] ?? []))
+            && !containSuits(nextSuits, (cardsByRank[i + 2] ?? []))) {
+            combos.danglers++;
+        }
+    }
 
     return combos;
 }
 
-function countColorBombs(cardsByRank) {
-    let count = 0;
-    const threes = cardsByRank[3];
-    const fives = cardsByRank[5];
-    const sevens = cardsByRank[7];
-    const nines = cardsByRank[9];
-
-    for (const suit in ['b', 'p', 'r', 'y']) {
-        if (threes.includes(suit)
-            && fives.includes(suit)
-            && sevens.includes(suit)
-            && nines.includes(suit)) {
-            count++
+function findColorBombs(cards) {
+    const cardsByRank = {
+        3: [],
+        5: [],
+        7: [],
+        9: []
+    };
+    for (const card of cards) {
+        if (card.rank % 2 === 1) {
+            cardsByRank[card.rank].push(card.suit);
         }
     }
 
+    const bombs = [];
 
-    return count;
+    for (const suit of ['b', 'p', 'r', 'y']) {
+        if (cardsByRank[3].includes(suit)
+            && cardsByRank[5].includes(suit)
+            && cardsByRank[7].includes(suit)
+            && cardsByRank[9].includes(suit)) {
+            bombs.push([
+                {rank: 3, suit: suit},
+                {rank: 5, suit: suit},
+                {rank: 7, suit: suit},
+                {rank: 9, suit: suit}
+            ]);
+        }
+    }
+
+    return bombs;
 }
 
-function countRainbowBombs(cardsByRank) {
-    const bombs = bombPermutations(cardsByRank[3], cardsByRank[5], cardsByRank[7], cardsByRank[9]);
-    let maxUnique = 0;
+function findRainbowBombs(cards) {
+    const cardsByRank = {
+        3: [],
+        5: [],
+        7: [],
+        9: []
+    };
+    for (const card of cards) {
+        if (card.rank % 2 === 1) {
+            cardsByRank[card.rank].push(card.suit);
+        }
+    }
+
+    return bombPermutations(cardsByRank[3], cardsByRank[5], cardsByRank[7], cardsByRank[9]);
+}
+
+function createBombSets(bombs) {
+    const bombSets = [];
+
     for (let i = 0; i < bombs.length; i++) {
-        let unique = 0;
+        const bombSet = [bombs[i]];
+        bombSets.push(bombSet);
         for (let j = 0; j < bombs.length; j++) {
             if (i === j) {
                 continue;
             }
             if (!bombsIntersect(bombs[i], bombs[j])) {
-                unique++;
+                bombSet.push(bombs[j]);
             }
         }
-        if (unique > maxUnique) {
-            maxUnique = unique;
-        }
     }
-    return maxUnique;
+
+    return bombSets;
 }
 
 function bombsIntersect(bomb1, bomb2) {
-    return new Set(bomb1).intersection(new Set(bomb2)).size > 0;
+    for (let i = 0; i < 4; i++) {
+        if (bomb1[i].suit === bomb2[i].suit) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function bombPermutations(threes, fives, sevens, nines) {
@@ -773,9 +853,13 @@ function bombPermutations(threes, fives, sevens, nines) {
         for (const five of fives) {
             for (const seven of sevens) {
                 for (const nine of nines) {
-                    const bomb = [three, five, seven, nine];
-                    if (new Set(bomb).size === 4) {
-                        bombs.push(bomb);
+                    if (new Set([three, five, seven, nine]).size === 4) {
+                        bombs.push([
+                            {rank: 3, suit: three},
+                            {rank: 5, suit: five},
+                            {rank: 7, suit: seven},
+                            {rank: 9, suit: nine}
+                        ]);
                     }
                 }
             }
@@ -1364,6 +1448,7 @@ function appendChartElements() {
 
     appendChartAnchor('scoreChart');
     appendChartAnchor('sumChart');
+    appendChartAnchor('valueChart');
     appendChartAnchor('tenChart');
     appendChartAnchor('bombChart');
 }
@@ -1378,7 +1463,7 @@ function appendChartAnchor(id) {
 }
 
 function removeAll2pCharts() {
-    const chartIds = ['scoreChart', 'sumChart', 'tenChart', 'bombChart'];
+    const chartIds = ['scoreChart', 'sumChart', 'valueChart', 'tenChart', 'bombChart'];
     for (const chart of chartIds) {
         removeChart(chart);
     }
@@ -1396,6 +1481,7 @@ function removeChart(canvasId) {
 function render2pChartsByType(stats, labels, cumulative) {
     render2pSimpleChart(stats, labels, 'points', 'scoreChart', 'Points', cumulative);
     render2pSimpleChart(stats, labels, 'sums', 'sumChart', 'Card Sum', cumulative);
+    render2pSimpleChart(stats, labels, 'values', 'valueChart', 'Hand Value', cumulative);
     render2pSimpleChart(stats, labels, 'tens', 'tenChart', '10 Count', cumulative);
     render2pBombChart(stats, labels, 'bombChart', cumulative);
 }
