@@ -28,10 +28,11 @@ const STAIR_VALUES = {
     "4x3": 20,
 }
 
-const COLOR_VALUE = 15;
-const RAINBOW_VALUE = 10;
+const COLOR_VALUE = 20;
+const RAINBOW_VALUE = 15;
 const COLOR_AND_RAINBOW_BONUS = 5;
 const DANGLER_VALUE = 1;
+const SINGLE_VALUE = -1;
 
 const CARD_VALUES = {
     2: 0,
@@ -40,9 +41,9 @@ const CARD_VALUES = {
     5: 0,
     6: 0,
     7: 1,
-    8: 1,
-    9: 1,
-    10: 2,
+    8: 2,
+    9: 2,
+    10: 3,
 };
 
 document.addEventListener("paste", async function (event) {
@@ -630,12 +631,14 @@ function computeHandValue(originalHand) {
 
     let value = 0;
 
+    // TODO this is not always right. for instance if you have 1 color and 2 rainbow it might be better to have the 2 rainbow than the color
     if (colorBombs.length > 0 || rainbowBombs.length === 0) {
         value = computeHandValueWithBombs(hand, colorBombs);
         value += COLOR_VALUE * colorBombs.length;
-        if (rainbowBombs.length > 0) {
-            value += COLOR_AND_RAINBOW_BONUS;
-        }
+        // TODO disable bonus for right now
+        // if (rainbowBombs.length > 0) {
+        //     value += COLOR_AND_RAINBOW_BONUS;
+        // }
     } else {
         let highValue = 0;
         let highBombs = [];
@@ -673,6 +676,7 @@ function computeHandValueWithBombs(originalHand, bombs) {
     }
 
     value += combos.danglers * DANGLER_VALUE;
+    value += combos.singles * SINGLE_VALUE;
 
     for (const card of hand) {
         if (card.suit !== 'w') {
@@ -703,6 +707,7 @@ function countCombos(hand) {
     }
 
     const combos = {
+        singles: 0,
         sets: {},
         runs: {},
         stairs: {},
@@ -760,11 +765,13 @@ function countCombos(hand) {
         }
 
         if (cardsByRank[i].length === 1
-            && (containSuits(cardsByRank[i], nextSuits) || containSuits(cardsByRank[i], previousSuits))
             && !(containSuits(cardsByRank[i], nextSuits) && containSuits(cardsByRank[i], previousSuits))
             && !containSuits(cardsByRank[i], (cardsByRank[i - 2] ?? []))
             && !containSuits(nextSuits, (cardsByRank[i + 2] ?? []))) {
-            combos.danglers++;
+            if (containSuits(cardsByRank[i], nextSuits) || containSuits(cardsByRank[i], previousSuits)) {
+                combos.danglers++;
+            }
+            combos.singles++;
         }
     }
 
