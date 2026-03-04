@@ -30,7 +30,6 @@ const STAIR_VALUES = {
 
 const COLOR_VALUE = 20;
 const RAINBOW_VALUE = 15;
-const COLOR_AND_RAINBOW_BONUS = 5;
 const DANGLER_VALUE = 1;
 const SINGLE_VALUE = -1;
 
@@ -629,16 +628,18 @@ function computeHandValue(originalHand) {
     const rainbowBombs = findRainbowBombs(hand);
     const rainbowBombSets = createBombSets(rainbowBombs);
 
+    let mostRainbows = 0;
+    for (const bombs of rainbowBombSets) {
+        if (bombs.length > mostRainbows) {
+            mostRainbows = bombs.length;
+        }
+    }
+
     let value = 0;
 
-    // TODO this is not always right. for instance if you have 1 color and 2 rainbow it might be better to have the 2 rainbow than the color
-    if (colorBombs.length > 0 || rainbowBombs.length === 0) {
+    if (rainbowBombs.length === 0 || (colorBombs.length > 0 && mostRainbows < 2)) {
         value = computeHandValueWithBombs(hand, colorBombs);
         value += COLOR_VALUE * colorBombs.length;
-        // TODO disable bonus for right now
-        // if (rainbowBombs.length > 0) {
-        //     value += COLOR_AND_RAINBOW_BONUS;
-        // }
     } else {
         let highValue = 0;
         let highBombs = [];
@@ -648,6 +649,14 @@ function computeHandValue(originalHand) {
             if (currentValue > highValue) {
                 highValue = currentValue;
                 highBombs = bombs;
+            }
+        }
+        if (colorBombs.length > 0) {
+            let currentValue = computeHandValueWithBombs(hand, colorBombs);
+            currentValue += COLOR_VALUE * colorBombs.length;
+            if (currentValue > highValue) {
+                highValue = currentValue;
+                highBombs = colorBombs;
             }
         }
         value = highValue;
@@ -1012,11 +1021,6 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
     output += `    <td>${player2Stats.led}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
-    output += "    <td>Started & Out First</td>\n";
-    output += `    <td>${player1Stats.ledAndWon}</td>\n`;
-    output += `    <td>${player2Stats.ledAndWon}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
     output += "    <td>10s</td>\n";
     output += `    <td>${player1Stats.tens}</td>\n`;
     output += `    <td>${player2Stats.tens}</td>\n`;
@@ -1037,24 +1041,14 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
     output += `    <td>${player2Stats.sumTotal}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
+    output += "    <td>Card Sum Avg/Min/Max</td>\n";
+    output += `    <td>${player1Stats.sumAvg.toFixed(2)} / ${player1Stats.sumMin} / ${player1Stats.sumMax}</td>\n`;
+    output += `    <td>${player2Stats.sumAvg.toFixed(2)} / ${player2Stats.sumMin} / ${player2Stats.sumMax}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
     output += "    <td>Rounds with > Sum</td>\n";
     output += `    <td>${player1Stats.largerSum}</td>\n`;
     output += `    <td>${player2Stats.largerSum}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Card Sum Avg</td>\n";
-    output += `    <td>${player1Stats.sumAvg.toFixed(2)}</td>\n`;
-    output += `    <td>${player2Stats.sumAvg.toFixed(2)}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Card Sum Min</td>\n";
-    output += `    <td>${player1Stats.sumMin}</td>\n`;
-    output += `    <td>${player2Stats.sumMin}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Card Sum Max</td>\n";
-    output += `    <td>${player1Stats.sumMax}</td>\n`;
-    output += `    <td>${player2Stats.sumMax}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
     output += "    <td>Hand Value Total</td>\n";
@@ -1062,24 +1056,14 @@ function render2pStatsAsHtmlString(tableId, stats, game, hands) {
     output += `    <td>${player2Stats.valueTotal}</td>\n`;
     output += "  </tr>\n";
     output += "  <tr>\n";
+    output += "    <td>Hand Value Avg/Min/Max</td>\n";
+    output += `    <td>${player1Stats.valueAvg.toFixed(2)} / ${player1Stats.valueMin} / ${player1Stats.valueMax}</td>\n`;
+    output += `    <td>${player2Stats.valueAvg.toFixed(2)} / ${player2Stats.valueMin} / ${player2Stats.valueMax}</td>\n`;
+    output += "  </tr>\n";
+    output += "  <tr>\n";
     output += "    <td>Rounds with > Value</td>\n";
     output += `    <td>${player1Stats.largerValue}</td>\n`;
     output += `    <td>${player2Stats.largerValue}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Hand Value Avg</td>\n";
-    output += `    <td>${player1Stats.valueAvg.toFixed(2)}</td>\n`;
-    output += `    <td>${player2Stats.valueAvg.toFixed(2)}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Hand Value Min</td>\n";
-    output += `    <td>${player1Stats.valueMin}</td>\n`;
-    output += `    <td>${player2Stats.valueMin}</td>\n`;
-    output += "  </tr>\n";
-    output += "  <tr>\n";
-    output += "    <td>Hand Value Max</td>\n";
-    output += `    <td>${player1Stats.valueMax}</td>\n`;
-    output += `    <td>${player2Stats.valueMax}</td>\n`;
     output += "  </tr>\n";
     output += "</table>\n</div>\n";
 
