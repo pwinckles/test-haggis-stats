@@ -31,7 +31,7 @@ const STAIR_VALUES = {
 const COLOR_VALUE = 20;
 const RAINBOW_VALUE = 15;
 const DANGLER_VALUE = 1;
-const SINGLE_VALUE = -1;
+const SINGLE_VALUE = -2;
 
 const CARD_VALUES = {
     2: 0,
